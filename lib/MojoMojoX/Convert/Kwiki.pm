@@ -288,11 +288,10 @@ sub _convert_person
         else
         {
             $person =
-                { active => 1,
-                  login  => lc $kwiki_user,
-                  name   => $kwiki_user,
-                  email  => $kwiki_user . '@localhost',
-                  pass   => 'change me',
+                { login => lc $kwiki_user,
+                  name  => $kwiki_user,
+                  email => $kwiki_user . '@localhost',
+                  pass  => 'change me',
                 };
         }
 
