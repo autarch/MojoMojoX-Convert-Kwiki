@@ -206,7 +206,7 @@ sub _convert_page
         $mm_page->update_content
             ( creator => $person,
               body    => $body,
-            )
+            );
 
         my $content = $mm_page->content();
 
