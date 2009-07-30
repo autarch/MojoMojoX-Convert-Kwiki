@@ -1,0 +1,9 @@
+Build.PL
+Changes
+MANIFEST
+MANIFEST.SKIP
+README # Will be created by "make dist"
+lib/MojoMojoX/Convert/Kwiki.pm
+t/kwalitee.t
+t/pod-coverage.t
+t/pod.t
