@@ -100,6 +100,18 @@ has debug =>
       default => 0,
     );
 
+has dump_page_titles =>
+    ( is      => 'ro',
+      isa     => 'Bool',
+      default => 0,
+    );
+
+has dump_usernames =>
+    ( is      => 'ro',
+      isa     => 'Bool',
+      default => 0,
+    );
+
 sub BUILD
 {
     my $self = shift;
@@ -114,6 +126,33 @@ sub run
 
     # Kwiki just assumes it is running from its root directory.
     local $CWD = $self->kwiki_root();
+
+    if ( $self->dump_page_titles() )
+    {
+        print "\n";
+        print "All page titles in the Kwiki wiki ...\n";
+        print $_->title, "\n"
+            for $self->_kwiki()->hub()->pages()->all();
+    }
+
+    if ( $self->dump_usernames() )
+    {
+        print "\n";
+        print "All usernames in the Kwiki wiki ...\n";
+
+        my %names;
+        for my $page ( $self->_kwiki()->hub()->pages()->all() )
+        {
+            for my $metadata ( reverse @{ $page->history() } )
+            {
+                $names{ $metadata->{edit_by} } = 1;
+            }
+        }
+
+        print "$_\n" for sort keys %names;
+    }
+
+    exit if $self->dump_page_titles() || $self->dump_username();
 
     for my $page ( $self->_kwiki()->hub()->pages()->all() )
     {
@@ -280,19 +319,13 @@ sub _convert_person
             $self->_debug( ' ... using implicit mapping' );
         }
 
-        if ($person)
+        $person ||= {};
+        for my $key ( qw( login pass name email ) )
         {
-            $person->{pass} = 'change me'
-                unless exists $person->{pass};
-        }
-        else
-        {
-            $person =
-                { login => lc $kwiki_user,
-                  name  => $kwiki_user,
-                  email => $kwiki_user . '@localhost',
-                  pass  => 'change me',
-                };
+            next if exists $person->{$key};
+
+            my $meth = '_default_' . $key . '_for_person';
+            $person->{$key} = $self->$meth( $kwiki_user, $person );
         }
 
         my $person_obj =
@@ -315,6 +348,35 @@ sub _convert_person
 
         $self->_person_map->{$kwiki_user} = $person_obj;
     }
+}
+
+sub _default_pass_for_person
+{
+    return 'change me';
+}
+
+sub _default_login_for_person
+{
+    my $self       = shift;
+    my $kwiki_user = shift;
+
+    return lc $kwiki_user;
+}
+
+sub _default_name_for_person
+{
+    my $self       = shift;
+    my $kwiki_user = shift;
+
+    return $kwiki_user;
+}
+
+sub _default_email_for_person
+{
+    my $self       = shift;
+    my $kwiki_user = shift;
+
+    return $kwiki_user . '@localhost';
 }
 
 sub _build_person_map
