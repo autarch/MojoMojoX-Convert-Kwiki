@@ -419,7 +419,7 @@ sub _convert_attachments
     my %map;
     for my $file ( @{ $self->_kwiki()->hub()->attachments()->files() } )
     {
-        $self->_debug( ' ... attachment for ' . $page->title() . ' - ' . $file->name() );
+        $self->_debug( ' ... attachment ' . $file->name() );
 
         my $file_path = join q{/}, $dir, $file->name();
 
@@ -498,8 +498,9 @@ sub _build_wiki_converter
 
     return
         HTML::WikiConverter->new
-            ( dialect  => 'MojoMojoMultiMarkdown',
-              wiki_uri => [ sub { $self->_convert_wiki_link(@_) } ],
+            ( dialect         => 'MojoMojoMultiMarkdown',
+              escape_entities => 0,
+              wiki_uri        => [ sub { $self->_convert_wiki_link(@_) } ],
             );
 }
 
