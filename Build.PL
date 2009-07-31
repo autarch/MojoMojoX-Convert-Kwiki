@@ -7,6 +7,7 @@ my $builder = Module::Build->new
     ( module_name        => 'MojoMojoX::Convert::Kwiki',
       license            => 'perl',
       requires           => { 'Config::JFDI'                  => '0',
+                              'Cwd'                           => '0',
                               'File::Basename'                => '0',
                               'File::chdir'                   => '0',
                               'File::Slurp'                   => '0',
