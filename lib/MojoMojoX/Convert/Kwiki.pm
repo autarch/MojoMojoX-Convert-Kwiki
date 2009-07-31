@@ -322,7 +322,7 @@ sub _convert_person
         }
 
         $person ||= {};
-        for my $key ( qw( login pass name email ) )
+        for my $key ( qw( active login pass name email ) )
         {
             next if exists $person->{$key};
 
@@ -350,6 +350,11 @@ sub _convert_person
 
         $self->_person_map->{$kwiki_user} = $person_obj;
     }
+}
+
+sub _default_active_for_person
+{
+    return -1;
 }
 
 sub _default_pass_for_person
