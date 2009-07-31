@@ -7,7 +7,8 @@ use FindBin;
 use lib "$FindBin::Bin/lib";
 
 my $class = $ENV{MMX_CONVERTER} || 'MojoMojoX::Convert::Kwiki';
-eval "use $class" or die $@;
+eval "use $class";
+die $@ if $@;
 
 $class->new_with_options()->run();
 
