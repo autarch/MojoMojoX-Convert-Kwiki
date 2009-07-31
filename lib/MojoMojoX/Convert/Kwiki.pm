@@ -207,36 +207,42 @@ sub _convert_page
     my $page = shift;
 
     return if $page->title() eq 'Help';
-
+    return unless $page->title() eq 'HalloweenOutreach';
     my $mm_title = $self->_convert_title( $page->title );
 
     $self->_debug( q{} );
     $self->_debug( "Converting page " . $page->title() . " to $mm_title" );
 
-    my $mm_page;
-    for my $metadata ( reverse @{ $page->history() } )
+    my @history = reverse @{ $page->history() };
+
+    my ( $path_pages, $proto_pages ) =
+        $self->_schema->resultset('Page')->path_pages($mm_title);
+
+    if ( @{ $proto_pages } )
+    {
+        my $creator = $self->_convert_person( $history[0]->{edit_by} );
+
+        $path_pages = $self->_schema->resultset('Page')->create_path_pages
+            ( path_pages  => $path_pages,
+              proto_pages => $proto_pages,
+              creator     => $creator,
+            );
+    }
+
+    my $mm_page = $path_pages->[-1];
+
+    my $attachment_map = $self->_convert_attachments( $page, $mm_page );
+
+    for my $metadata (@history)
     {
         $self->_debug( " ... revision $metadata->{revision_id}" );
 
         my $person = $self->_convert_person( $metadata->{edit_by} );
 
-        my ( $path_pages, $proto_pages ) =
-            $self->_schema->resultset('Page')->path_pages($mm_title);
-
-        if (@{$proto_pages})
-        {
-            $path_pages = $self->_schema->resultset('Page')->create_path_pages
-                ( path_pages  => $path_pages,
-                  proto_pages => $proto_pages,
-                  creator     => $person,
-                );
-        }
-
-        $mm_page = $path_pages->[-1];
-
         my $body =
             $self->_convert_body
-                ( scalar $self->_kwiki->hub->archive->fetch
+                ( $attachment_map,
+                  scalar $self->_kwiki->hub->archive->fetch
                       ( $page, $metadata->{revision_id} )
                 );
 
@@ -250,8 +256,6 @@ sub _convert_page
         $content->created( $metadata->{edit_unixtime} );
         $content->update;
     }
-
-    $self->_convert_attachments( $page, $mm_page );
 }
 
 sub _convert_title
@@ -402,18 +406,90 @@ sub _build_anonymous_user
     return $self->_schema()->resultset('Person')->search( {login => $anonymous} )->first();
 }
 
+sub _convert_attachments
+{
+    my $self    = shift;
+    my $page    = shift;
+    my $mm_page = shift;
+
+    return unless $self->_kwiki()->hub()->attachments()->get_attachments( $page->id() );
+
+    my $dir = join q{/}, $self->_kwiki()->hub()->attachments()->plugin_directory(), $page->id();
+
+    my %map;
+    for my $file ( @{ $self->_kwiki()->hub()->attachments()->files() } )
+    {
+        $self->_debug( ' ... attachment for ' . $page->title() . ' - ' . $file->name() );
+
+        my $file_path = join q{/}, $dir, $file->name();
+
+        my $att =
+            $self->_schema()->resultset('Attachment')
+                 ->create_from_file( $mm_page, $file->name(), $file_path );
+
+        $map{ $file->name() } = $att->id();
+    }
+
+    return \%map;
+}
+
+# gibberish that will not be present in any real page. We can use this
+# to delimit things that need to be dealt with _after_ the kwiki ->
+# html -> markdown conversion.
+my $Marker = 'asfkjsdkglsjdglkjsga09dsug0329jt3poi3p41o6j24963109ytu0cgsv';
 sub _convert_body
 {
-    my $self = shift;
-    my $body = shift;
+    my $self           = shift;
+    my $attachment_map = shift;
+    my $body           = shift;
 
     return q{} unless defined $body && length $body;
 
-    return
-        $self->_wiki_converter()->html2wiki
-            ( $self->_kwiki->hub->formatter->text_to_html
-                  ( Encode::encode( 'utf8', $body ) )
-            );
+    my $counter = 1;
+    my %post_convert;
+    $body =~ s/\{file:?\s*([^}]+)}/
+               $post_convert{$counter++} = [ 'attachment', $1 ];
+               $Marker . ':' . ( $counter - 1 )/eg;
+
+    my $markdown =
+        Encode::decode( 'utf8',
+                        $self->_wiki_converter()->html2wiki
+                        ( $self->_kwiki->hub->formatter->text_to_html
+                          ( Encode::encode( 'utf8', $body ) )
+                        )
+                      );
+
+    $markdown =~ s/$Marker:(\d+)/
+                   $self->_post_convert( $post_convert{$1}, $attachment_map )/eg;
+
+    return $markdown;
+}
+
+sub _post_convert
+{
+    my $self           = shift;
+    my $action         = shift;
+    my $attachment_map = shift;
+
+    if ( $action->[0] eq 'attachment' )
+    {
+        $self->_attachment_link( $action->[1], $attachment_map );
+    }
+    else
+    {
+        die "Unknown post-covert action: $action->[0]";
+    }
+}
+
+sub _attachment_link
+{
+    my $self           = shift;
+    my $filename       = shift;
+    my $attachment_map = shift;
+
+    return q{} unless $attachment_map->{$filename};
+
+    return "[$filename](.attachment/$attachment_map->{$filename})";
 }
 
 sub _build_wiki_converter
@@ -439,27 +515,6 @@ sub _convert_wiki_link
     }
 
     return;
-}
-
-sub _convert_attachments
-{
-    my $self    = shift;
-    my $page    = shift;
-    my $mm_page = shift;
-
-    return unless $self->_kwiki()->hub()->attachments()->get_attachments( $page->id() );
-
-    my $dir = join q{/}, $self->_kwiki()->hub()->attachments()->plugin_directory(), $page->id();
-
-    for my $file ( @{ $self->_kwiki()->hub()->attachments()->files() } )
-    {
-        $self->_debug( ' ... attachment for ' . $page->title() . ' - ' . $file->name() );
-
-        my $file_path = join q{/}, $dir, $file->name();
-
-        $self->_schema()->resultset('Attachment')
-             ->create_from_file( $mm_page, $file->name(), $file_path );
-    }
 }
 
 sub _debug
