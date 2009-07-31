@@ -152,7 +152,7 @@ sub run
         print "$_\n" for sort keys %names;
     }
 
-    exit if $self->dump_page_titles() || $self->dump_username();
+    exit if $self->dump_page_titles() || $self->dump_usernames();
 
     for my $page ( $self->_kwiki()->hub()->pages()->all() )
     {
@@ -192,8 +192,6 @@ sub _build_schema
     {
         $dsn = $config->{'Model::DBIC'}->{'connect_info'};
     }
-
-    $dsn =~ s{__HOME__}{$FindBin::Bin/../..}g;
 
     my $schema = MojoMojo::Schema->connect( $dsn, $user, $pass )
         or die 'Failed to connect to database';
