@@ -5,6 +5,7 @@ use warnings;
 
 use Config::JFDI;
 use Cwd qw( abs_path );
+use Encode qw( decode encode );
 use File::Basename qw( basename );
 use File::chdir;
 use File::Slurp qw( read_file );
@@ -15,6 +16,7 @@ use Kwiki ();
 use Kwiki::Attachments ();
 use MojoMojo::Schema;
 use Scalar::Util qw( blessed );
+use URI::Escape qw( uri_unescape );
 
 use Moose;
 use MooseX::StrictConstructor;
@@ -158,6 +160,8 @@ sub run
     {
         $self->_convert_page($page);
     }
+
+    $self->_update_backlinks_and_search_index();
 }
 
 sub _build_kwiki
@@ -205,6 +209,8 @@ sub _convert_page
 {
     my $self = shift;
     my $page = shift;
+
+    $page->title( $self->_proper_kwiki_title( $page->id ) );
 
     return if $page->title() eq 'Help';
 
@@ -256,6 +262,18 @@ sub _convert_page
         $content->created( $metadata->{edit_unixtime} );
         $content->update;
     }
+}
+
+# Kwiki completely breaks utf8 in page titles with its conversion
+# routines. This redoes the conversion and unbreaks utf8.
+sub _proper_kwiki_title
+{
+    my $self = shift;
+    my $id   = shift;
+
+    my $title = uri_unescape($id);
+
+    return decode( 'utf8', $title );
 }
 
 sub _convert_title
@@ -456,13 +474,15 @@ sub _convert_body
                $post_convert{$counter++} = [ 'attachment', $1 ];
                $Marker . ':' . ( $counter - 1 )/eg;
 
+    # This encode/decode stuff should not be necessary, but
+    # HTML::WikiConverter blindly calls decode and encode internally on the
+    # data, which is broken and wrong, but we have to dealw ith it.
+    $body = encode('utf8', $body );
     my $markdown =
-        Encode::decode( 'utf8',
-                        $self->_wiki_converter()->html2wiki
-                        ( $self->_kwiki->hub->formatter->text_to_html
-                          ( Encode::encode( 'utf8', $body ) )
-                        )
-                      );
+                $self->_wiki_converter()->html2wiki
+                    ( $self->_kwiki->hub->formatter->text_to_html($body) );
+
+    $markdown = decode('utf8', $body);
 
     $markdown =~ s/$Marker:(\d+)/
                    $self->_post_convert( $post_convert{$1}, $attachment_map )/eg;
@@ -521,6 +541,17 @@ sub _convert_wiki_link
     }
 
     return;
+}
+
+sub _update_backlinks_and_search_index
+{
+#         $c->model("DBIC::Page")->set_paths($page);
+#         $c->model('Search')->index_page($page)
+#             unless $c->pref('disable_search');
+#         $page->content->store_links();
+#         $c->model('DBIC::WantedPage')
+#           ->search( { to_path => $c->stash->{path} } )->delete();
+
 }
 
 sub _debug
