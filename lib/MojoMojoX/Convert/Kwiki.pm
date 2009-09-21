@@ -210,9 +210,16 @@ sub _convert_page
     my $self = shift;
     my $page = shift;
 
-    $page->title( $self->_proper_kwiki_title( $page->id ) );
+    if ( $self->_skip_page($page) )
+    {
+        $self->{ q{} );
+        $self->_debug( "Skiping page " . $page->title() );
+        return;
+    }
 
     return if $page->title() eq 'Help';
+
+    $page->title( $self->_proper_kwiki_title( $page->id ) );
 
     my $mm_title = $self->_convert_title( $page->title );
 
@@ -262,6 +269,11 @@ sub _convert_page
         $content->created( $metadata->{edit_unixtime} );
         $content->update;
     }
+}
+
+sub _skip_page
+{
+    return 0;
 }
 
 # Kwiki completely breaks utf8 in page titles with its conversion
